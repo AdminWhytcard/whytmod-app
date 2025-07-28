@@ -1,0 +1,95 @@
+name: 🖥️ Self-Hosted Runner Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_name:
+        description: 'Nom du runner'
+        required: true
+        default: 'whytmod-windows-runner'
+      runner_labels:
+        description: 'Labels du runner (séparés par des virgules)'
+        required: true
+        default: 'windows,whytmod,self-hosted'
+
+jobs:
+  setup-runner:
+    name: 🔧 Configure Self-Hosted Runner
+    runs-on: windows-latest
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 📋 Display runner information
+      run: |
+        Write-Host "🏷️ Nom du runner: ${{ github.event.inputs.runner_name }}" -ForegroundColor Green
+        Write-Host "🏷️ Labels: ${{ github.event.inputs.runner_labels }}" -ForegroundColor Green
+        Write-Host "📍 Repository: ${{ github.repository }}" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "📝 Instructions pour configurer le runner:" -ForegroundColor Yellow
+        Write-Host "1. Télécharger le runner depuis: https://github.com/actions/runner/releases" -ForegroundColor White
+        Write-Host "2. Extraire dans C:\actions-runner" -ForegroundColor White
+        Write-Host "3. Exécuter la commande de configuration:" -ForegroundColor White
+        Write-Host ""
+        Write-Host ".\config.cmd --url https://github.com/${{ github.repository }} --token <TOKEN> --name ${{ github.event.inputs.runner_name }} --work _work --labels ${{ github.event.inputs.runner_labels }}" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host "4. Installer comme service:" -ForegroundColor White
+        Write-Host ".\svc.sh install" -ForegroundColor Cyan
+        Write-Host ".\svc.sh start" -ForegroundColor Cyan
+      
+    - name: 🔗 Generate runner registration URL
+      run: |
+        $repoUrl = "https://github.com/${{ github.repository }}/settings/actions/runners/new"
+        Write-Host "🌐 URL de configuration du runner:" -ForegroundColor Green
+        Write-Host $repoUrl -ForegroundColor Blue
+        
+    - name: 📊 Check existing runners
+      run: |
+        Write-Host "📊 Vérification des runners existants..." -ForegroundColor Yellow
+        # Cette étape sera complétée avec l'API GitHub pour lister les runners
+
+  test-runner:
+    name: 🧪 Test Runner Connection
+    runs-on: self-hosted
+    needs: setup-runner
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Verify runner environment
+      run: |
+        Write-Host "✅ Runner connecté avec succès!" -ForegroundColor Green
+        Write-Host "🖥️ OS: $env:OS" -ForegroundColor Cyan
+        Write-Host "🏷️ Runner: $env:RUNNER_NAME" -ForegroundColor Cyan
+        Write-Host "📁 Workspace: $env:GITHUB_WORKSPACE" -ForegroundColor Cyan
+        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
+        
+    - name: 🟢 Test Node.js availability
+      run: |
+        try {
+          $nodeVersion = node --version
+          Write-Host "✅ Node.js version: $nodeVersion" -ForegroundColor Green
+        } catch {
+          Write-Host "❌ Node.js non installé sur ce runner" -ForegroundColor Red
+        }
+        
+    - name: 🔧 Test Git availability
+      run: |
+        try {
+          $gitVersion = git --version
+          Write-Host "✅ Git version: $gitVersion" -ForegroundColor Green
+        } catch {
+          Write-Host "❌ Git non installé sur ce runner" -ForegroundColor Red
+        }
+        
+    - name: 📊 Runner performance test
+      run: |
+        Write-Host "🚀 Test de performance du runner..." -ForegroundColor Yellow
+        $start = Get-Date
+        1..1000 | ForEach-Object { $_ * 2 }
+        $end = Get-Date
+        $duration = ($end - $start).TotalMilliseconds
+        Write-Host "⏱️ Test terminé en $duration ms" -ForegroundColor Green

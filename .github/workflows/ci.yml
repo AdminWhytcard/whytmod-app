@@ -1,0 +1,168 @@
+name: 🔄 CI/CD WhytMod AI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '20'
+  ELECTRON_VERSION: '28'
+
+jobs:
+  # Tests et validation
+  test:
+    name: 🧪 Tests & Validation
+    runs-on: windows-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 🔍 Lint TypeScript
+      run: npm run lint
+      
+    - name: 🧪 Run tests
+      run: npm run test
+      
+    - name: 📊 Test coverage
+      run: npm run test:coverage
+      
+    - name: 🛡️ Security audit
+      run: npm run security:audit
+
+  # Build application
+  build:
+    name: 🏗️ Build Application
+    runs-on: windows-latest
+    needs: test
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 🏗️ Build React app
+      run: npm run build:renderer
+      
+    - name: 🏗️ Build Electron main
+      run: npm run build:main
+      
+    - name: 📱 Build Electron app
+      run: npm run build:electron
+      
+    - name: 📤 Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: whytmod-build-${{ github.sha }}
+        path: |
+          dist/
+          !dist/**/*.map
+        retention-days: 30
+
+  # Tests sécurité Electron
+  security:
+    name: 🛡️ Security Audit
+    runs-on: windows-latest
+    needs: build
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 📥 Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: whytmod-build-${{ github.sha }}
+        path: dist/
+        
+    - name: 🔍 Install security tools
+      run: |
+        npm install -g @inspect-js/inspectron
+        npm install -g electron-security-checker
+        
+    - name: 🛡️ Run Inspectron audit
+      run: npx inspectron --input ./dist --output ./security-report.json --format json
+      
+    - name: 🔐 Run ElectroNG audit
+      run: npx electron-security-checker --input ./dist --output ./electrong-report.json
+      
+    - name: 📤 Upload security reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports-${{ github.sha }}
+        path: |
+          security-report.json
+          electrong-report.json
+        retention-days: 90
+
+  # Release automatique
+  release:
+    name: 🚀 Release
+    runs-on: windows-latest
+    needs: [test, build, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 📥 Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: whytmod-build-${{ github.sha }}
+        path: dist/
+        
+    - name: 📦 Package application
+      run: npm run package
+      
+    - name: 🔐 Sign application (Windows)
+      run: npm run sign:windows
+      env:
+        WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        
+    - name: 📤 Create release
+      run: npm run release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 📊 Upload release metrics
+      run: npm run metrics:upload
+      env:
+        ANALYTICS_KEY: ${{ secrets.ANALYTICS_KEY }}
